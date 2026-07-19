@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+@theme {
+  --color-parchment-50: #fbf6ea;
+  --color-parchment-100: #f6ecd6;
+  --color-parchment-200: #ecdcb6;
+  --color-parchment-300: #dcc38c;
+  --color-ink-900: #2b1c0f;
+  --color-ink-800: #3d2a17;
+  --color-ink-700: #5a4227;
+  --color-heritage-700: #7a3b1f;
+  --color-heritage-600: #9c4d28;
+  --color-gold-500: #b8860b;
+  --color-gold-400: #c9a227;
+
+  --font-serif: var(--font-noto-serif), "Georgia", "Times New Roman", serif;
+  --font-malayalam: var(--font-noto-malayalam), "Noto Sans Malayalam", sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-serif);
+  color: var(--color-ink-900);
+  background-color: #6b4f34;
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(0, 0, 0, 0.25), transparent 55%),
+    radial-gradient(circle at 80% 80%, rgba(0, 0, 0, 0.3), transparent 55%),
+    linear-gradient(135deg, #7a5a3a 0%, #5c4228 100%);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Malayalam text rendering */
+.malayalam {
+  font-family: var(--font-malayalam);
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+/* Parchment page surface */
+.parchment {
+  background-color: var(--color-parchment-100);
+  background-image:
+    radial-gradient(circle at 15% 10%, rgba(210, 180, 130, 0.35), transparent 40%),
+    radial-gradient(circle at 85% 90%, rgba(160, 120, 70, 0.25), transparent 45%),
+    linear-gradient(180deg, var(--color-parchment-50), var(--color-parchment-200));
+}
+
+/* Decorative inner border used on pages */
+.page-border {
+  box-shadow:
+    inset 0 0 0 1px rgba(122, 59, 31, 0.35),
+    inset 0 0 0 6px rgba(255, 255, 255, 0.25),
+    inset 0 0 0 7px rgba(122, 59, 31, 0.25);
+}
+
+/* Vintage photo frame */
+.vintage-frame {
+  padding: 8px;
+  background: linear-gradient(145deg, #f3e6c9, #d8bd8c);
+  border: 1px solid rgba(122, 59, 31, 0.5);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.25),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.5);
+}
+
+/* react-pageflip surface tuning */
+.stf__parent {
+  margin: 0 auto;
+  touch-action: pan-y;
+}
+
+.book-page {
+  overflow: hidden;
+}
+
+/* Thin heritage scrollbar inside long pages */
+.heritage-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.heritage-scroll::-webkit-scrollbar-thumb {
+  background: rgba(122, 59, 31, 0.4);
+  border-radius: 3px;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}

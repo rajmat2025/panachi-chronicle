@@ -1,0 +1,74 @@
+// Panachickal Chronicle — READ-ONLY schema.
+//
+// This schema is a self-contained, read-only projection of the existing
+// `panachi` family-tree database (owned by the separate tree app).
+// The chronicle app NEVER writes to this database: no migrations are defined
+// here, and all app-layer access is limited to reads/queries.
+//
+// Column mappings mirror the source `people` / `media` tables exactly so the
+// generated client can query them without any schema drift.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/client"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Person {
+  id               String  @id @db.VarChar(36)
+  genealogyCode    String  @unique @map("genealogy_code") @db.VarChar(64)
+  parentCode       String? @map("parent_code") @db.VarChar(64)
+  branchCode       String  @map("branch_code") @db.VarChar(16)
+  generationNumber Int     @map("generation_number")
+  sortOrder        Int     @default(0) @map("sort_order")
+
+  displayName   String  @map("display_name") @db.Text
+  originalName  String? @map("original_name") @db.Text
+  otherName     String? @map("other_name") @db.Text
+  familyName    String? @map("family_name") @db.Text
+  place         String? @db.Text
+  qualification String? @db.Text
+
+  spouseName          String?   @map("spouse_name") @db.Text
+  originalSpouseName  String?   @map("original_spouse_name") @db.Text
+  spouseFamilyName    String?   @map("spouse_family_name") @db.Text
+  spousePlace         String?   @map("spouse_place") @db.Text
+  spouseQualification String?   @map("spouse_qualification") @db.Text
+  spouseDob           DateTime? @map("spouse_dob")
+  spouseDod           DateTime? @map("spouse_dod")
+
+  houseLocation         String?  @map("house_location") @db.Text
+  notes                 String?  @db.Text
+  dob                   DateTime?
+  dod                   DateTime?
+  profileImageUrl       String?  @map("profile_image_url") @db.Text
+  spouseProfileImageUrl String?  @map("spouse_profile_image_url") @db.Text
+
+  isVisible Boolean @default(true) @map("is_visible")
+
+  media Media[]
+
+  @@index([parentCode])
+  @@index([branchCode])
+  @@index([generationNumber])
+  @@map("people")
+}
+
+model Media {
+  id        String   @id @db.VarChar(36)
+  personId  String   @map("person_id") @db.VarChar(36)
+  url       String   @db.Text
+  mediaType String   @default("image") @map("media_type") @db.VarChar(32)
+  subject   String   @default("PERSON") @db.VarChar(16)
+  caption   String?  @db.Text
+  sortOrder Int      @default(0) @map("sort_order")
+
+  person Person @relation(fields: [personId], references: [id])
+
+  @@index([personId])
+  @@map("media")
+}
