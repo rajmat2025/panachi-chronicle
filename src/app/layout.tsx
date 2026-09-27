@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Serif, Noto_Sans_Malayalam } from "next/font/google";
+import { Noto_Serif, Noto_Sans_Malayalam, Noto_Serif_Malayalam } from "next/font/google";
 import "./globals.css";
 
 const notoSerif = Noto_Serif({
@@ -14,6 +14,13 @@ const notoMalayalam = Noto_Sans_Malayalam({
   subsets: ["malayalam"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-noto-malayalam",
+  display: "swap",
+});
+
+const notoSerifMalayalam = Noto_Serif_Malayalam({
+  subsets: ["malayalam"],
+  weight: ["400", "600", "700"],
+  variable: "--font-noto-serif-malayalam",
   display: "swap",
 });
 
@@ -37,7 +44,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${notoSerif.variable} ${notoMalayalam.variable}`}>
+      <body
+        className={`${notoSerif.variable} ${notoMalayalam.variable} ${notoSerifMalayalam.variable}`}
+      >
         {children}
       </body>
     </html>

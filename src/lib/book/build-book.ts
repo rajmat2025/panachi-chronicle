@@ -1,21 +1,23 @@
 import { compareGenealogyCodes, generationLabel } from "@/lib/genealogy/notation";
 import type {
-  BookPage,
   ChildRef,
-  ChronicleBook,
+  ChronicleData,
   ChroniclePerson,
   FamilyCell,
   GenerationMarker,
   SearchEntry,
   TemplateVariant,
-  TocEntry,
+  TocGroup,
 } from "@/types/chronicle";
 
 /** A node with lots of direct children renders as a directory (Gamma). */
 const GAMMA_CHILD_THRESHOLD = 6;
 
-/** TOC entries per TOC page. */
-const TOC_ENTRIES_PER_PAGE = 22;
+/** Childless, unmarried people with longer notes than this keep a page of their own. */
+const INLINE_NOTES_LIMIT = 240;
+
+/** Upstream d'Aboville codes (G, G.1, …) are stored with this branch code. */
+const ANCESTRAL_BRANCH = "G6";
 
 function hasText(v: string | null | undefined): boolean {
   return !!v && v.trim().length > 0;
@@ -71,7 +73,6 @@ function depthFirstOrder(people: ChroniclePerson[]): ChroniclePerson[] {
 
   for (const root of roots) visit(root);
 
-  // Safety: append any orphans not reached (shouldn't happen with clean data).
   for (const p of people) {
     if (!seen.has(p.genealogyCode)) {
       ordered.push(p);
@@ -82,18 +83,19 @@ function depthFirstOrder(people: ChroniclePerson[]): ChroniclePerson[] {
   return ordered;
 }
 
-/**
- * Assemble the full book: cover → TOC pages → one family-cell page per person
- * (in depth-first order), plus TOC / generation / search indices with correct
- * page anchors.
- */
-export function buildBook(people: ChroniclePerson[]): ChronicleBook {
-  const ordered = depthFirstOrder(people);
+function groupKey(p: ChroniclePerson): string {
+  return p.branchCode || ANCESTRAL_BRANCH;
+}
 
-  // Precompute direct children per code for cell rendering.
+/**
+ * Assemble the family section of the book in depth-first order. Page numbers
+ * are resolved on the client once the history section has been paginated.
+ */
+export function buildChronicle(people: ChroniclePerson[]): ChronicleData {
+  const ordered = depthFirstOrder(people);
+  const byCode = new Map(ordered.map((p) => [p.genealogyCode, p]));
+
   const directChildren = new Map<string, ChroniclePerson[]>();
-  const byCode = new Map<string, ChroniclePerson>();
-  for (const p of ordered) byCode.set(p.genealogyCode, p);
   for (const p of ordered) {
     if (p.parentCode && byCode.has(p.parentCode)) {
       const list = directChildren.get(p.parentCode) ?? [];
@@ -102,50 +104,78 @@ export function buildBook(people: ChroniclePerson[]): ChronicleBook {
     }
   }
 
-  // Front matter: 1 cover page + N toc pages. Compute TOC page count first.
-  const tocPageCount = Math.max(1, Math.ceil(ordered.length / TOC_ENTRIES_PER_PAGE));
-  const firstCellPage = 1 + tocPageCount; // after cover + toc pages
+  const isInline = (p: ChroniclePerson) =>
+    !!p.parentCode &&
+    byCode.has(p.parentCode) &&
+    !hasText(p.spouseName) &&
+    !directChildren.has(p.genealogyCode) &&
+    (p.notes?.trim().length ?? 0) <= INLINE_NOTES_LIMIT;
 
-  // Map each person to its final page index.
-  const pageIndexOf = new Map<string, number>();
-  ordered.forEach((p, i) => pageIndexOf.set(p.genealogyCode, firstCellPage + i));
+  const pagePeople = ordered.filter((p) => !isInline(p));
+  const cellIndexOf = new Map<string, number>();
+  pagePeople.forEach((p, i) => cellIndexOf.set(p.genealogyCode, i));
+  // Inline children resolve to their parent's page (parents always have a page).
+  for (const p of ordered) {
+    if (!cellIndexOf.has(p.genealogyCode)) {
+      cellIndexOf.set(p.genealogyCode, cellIndexOf.get(p.parentCode!)!);
+    }
+  }
 
-  // Build family cells.
-  const cells: FamilyCell[] = ordered.map((person) => {
+  const cells: FamilyCell[] = pagePeople.map((person) => {
     const kids = directChildren.get(person.genealogyCode) ?? [];
     const children: ChildRef[] = kids.map((k) => ({
       genealogyCode: k.genealogyCode,
       displayName: k.displayName,
-      originalName: k.originalName,
-      pageIndex: pageIndexOf.get(k.genealogyCode)!,
+      cellIndex: cellIndexOf.get(k.genealogyCode)!,
+      ...(isInline(k) ? { inline: k } : {}),
     }));
-    return {
-      person,
-      children,
-      variant: selectVariant(person, kids.length),
-    };
+    return { person, children, variant: selectVariant(person, kids.length) };
   });
 
-  // TOC entries (in book order).
-  const toc: TocEntry[] = ordered.map((p) => ({
-    genealogyCode: p.genealogyCode,
-    displayName: p.displayName,
-    originalName: p.originalName,
-    generationNumber: p.generationNumber,
-    branchCode: p.branchCode,
-    pageIndex: pageIndexOf.get(p.genealogyCode)!,
-  }));
+  const tocGroups: TocGroup[] = [];
+  let current: { branch: string; group: TocGroup } | null = null;
+  // A branch can appear in several runs (the ancestral line resumes after
+  // branches A–F), so indentation is relative to the branch's first person.
+  const baseGeneration = new Map<string, number>();
+  const runCount = new Map<string, number>();
 
-  // Search index.
+  ordered.forEach((p) => {
+    const branch = groupKey(p);
+    if (!current || current.branch !== branch) {
+      const run = (runCount.get(branch) ?? 0) + 1;
+      runCount.set(branch, run);
+      if (!baseGeneration.has(branch)) baseGeneration.set(branch, p.generationNumber);
+      const root = byCode.get(branch);
+      const base =
+        branch === ANCESTRAL_BRANCH
+          ? "Ancestral Line"
+          : `Branch ${branch}${root ? ` · ${root.displayName}` : ""}`;
+      current = {
+        branch,
+        group: {
+          key: run === 1 ? branch : `${branch}-${run}`,
+          label: run === 1 ? base : `${base} (continued)`,
+          entries: [],
+        },
+      };
+      tocGroups.push(current.group);
+    }
+    const groupBaseGeneration = baseGeneration.get(branch)!;
+    current.group.entries.push({
+      genealogyCode: p.genealogyCode,
+      displayName: p.displayName,
+      depth: Math.max(0, p.generationNumber - groupBaseGeneration),
+      cellIndex: cellIndexOf.get(p.genealogyCode)!,
+    });
+  });
+
   const searchIndex: SearchEntry[] = ordered.map((p) => ({
     genealogyCode: p.genealogyCode,
     displayName: p.displayName,
-    originalName: p.originalName,
     spouseName: p.spouseName,
-    pageIndex: pageIndexOf.get(p.genealogyCode)!,
+    cellIndex: cellIndexOf.get(p.genealogyCode)!,
   }));
 
-  // Generation markers: first page where each generation appears.
   const generations: GenerationMarker[] = [];
   const seenGen = new Set<number>();
   for (const p of ordered) {
@@ -153,41 +183,18 @@ export function buildBook(people: ChroniclePerson[]): ChronicleBook {
       seenGen.add(p.generationNumber);
       generations.push({
         generationNumber: p.generationNumber,
-        pageIndex: pageIndexOf.get(p.genealogyCode)!,
         label: generationLabel(p.generationNumber),
+        cellIndex: cellIndexOf.get(p.genealogyCode)!,
       });
     }
   }
   generations.sort((a, b) => a.generationNumber - b.generationNumber);
 
-  // Assemble pages array.
-  const pages: BookPage[] = [];
-  pages.push({ index: 0, kind: "cover" });
-
-  for (let t = 0; t < tocPageCount; t++) {
-    const start = t * TOC_ENTRIES_PER_PAGE;
-    pages.push({
-      index: 1 + t,
-      kind: "toc",
-      tocEntries: toc.slice(start, start + TOC_ENTRIES_PER_PAGE),
-    });
-  }
-
-  cells.forEach((cell, i) => {
-    pages.push({ index: firstCellPage + i, kind: "cell", cell });
-  });
-
-  // Ensure an even count for clean dual-page spreads (add a back page if odd).
-  if (pages.length % 2 !== 0) {
-    pages.push({ index: pages.length, kind: "back" });
-  }
-
   return {
-    pages,
-    toc,
+    cells,
+    tocGroups,
     generations,
     searchIndex,
-    firstCellPage,
     totalPeople: ordered.length,
   };
 }

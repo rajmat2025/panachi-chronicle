@@ -20,7 +20,6 @@ export interface ChroniclePerson {
   sortOrder: number;
 
   displayName: string;
-  originalName: string | null;
   otherName: string | null;
   familyName: string | null;
   place: string | null;
@@ -48,9 +47,13 @@ export interface ChroniclePerson {
 export interface ChildRef {
   genealogyCode: string;
   displayName: string;
-  originalName: string | null;
-  /** Page index the child's own family cell lives on (for anchor links). */
-  pageIndex: number;
+  /** The child's own family cell, or the parent's cell when shown inline. */
+  cellIndex: number;
+  /**
+   * Set for children with no spouse and no children of their own: they are
+   * shown in full on the parent's page instead of on a page of their own.
+   */
+  inline?: ChroniclePerson;
 }
 
 export type TemplateVariant = "alpha" | "beta" | "gamma";
@@ -62,46 +65,97 @@ export interface FamilyCell {
   variant: TemplateVariant;
 }
 
-export type BookPageKind = "cover" | "toc" | "cell" | "back";
-
-export interface BookPage {
-  index: number;
-  kind: BookPageKind;
-  cell?: FamilyCell;
-  /** For TOC pages: the slice of entries shown on this page. */
-  tocEntries?: TocEntry[];
-}
-
-export interface TocEntry {
+export interface TocPersonEntry {
   genealogyCode: string;
   displayName: string;
-  originalName: string | null;
-  generationNumber: number;
-  branchCode: string;
-  pageIndex: number;
+  /** Depth below the group's first generation, used for indentation. */
+  depth: number;
+  cellIndex: number;
+}
+
+/** Contents grouping: the ancestral line, then root branches A–F. */
+export interface TocGroup {
+  key: string;
+  label: string;
+  entries: TocPersonEntry[];
 }
 
 export interface GenerationMarker {
   generationNumber: number;
-  /** First page index where this generation appears. */
-  pageIndex: number;
   label: string;
+  /** First family cell of this generation. */
+  cellIndex: number;
 }
 
 export interface SearchEntry {
   genealogyCode: string;
   displayName: string;
-  originalName: string | null;
   spouseName: string | null;
-  pageIndex: number;
+  cellIndex: number;
 }
 
-export interface ChronicleBook {
-  pages: BookPage[];
-  toc: TocEntry[];
+/** Everything the client needs to assemble the book. */
+export interface ChronicleData {
+  cells: FamilyCell[];
+  tocGroups: TocGroup[];
   generations: GenerationMarker[];
   searchIndex: SearchEntry[];
-  /** page index of the first family cell (for "start reading"). */
-  firstCellPage: number;
   totalPeople: number;
+}
+
+/**
+ * Flowing text blocks (family history, contents). These are paginated on the
+ * client by measuring them against the fixed letter-size content box.
+ */
+export type BookPart = "contents" | "history" | "index" | "cells";
+
+/** A link target relative to the start of a book part. */
+export interface NavTarget {
+  part: BookPart;
+  offset: number;
+}
+
+export type FlowBlock =
+  | { kind: "part"; id: string; text: string }
+  | { kind: "section"; id: string; text: string }
+  | { kind: "subsection"; id: string; text: string }
+  | { kind: "minor"; id: string; text: string }
+  | { kind: "subtitle"; id: string; text: string }
+  | {
+      kind: "para";
+      id: string;
+      text: string;
+      /** Continues from the previous page (no first-line indent). */
+      continued?: boolean;
+      /** Continues onto the next page (justify the last line). */
+      continues?: boolean;
+    }
+  | { kind: "note"; id: string; lines: string[] }
+  | { kind: "list"; id: string; items: string[] }
+  | { kind: "table"; id: string; header: string[]; rows: string[][] }
+  | { kind: "toc-title"; id: string; text: string; subtitle?: string }
+  | { kind: "toc-group"; id: string; text: string; ml?: boolean }
+  | {
+      kind: "toc-row";
+      id: string;
+      code?: string;
+      text: string;
+      depth: number;
+      target: NavTarget;
+      /** Malayalam heading text (history entries). */
+      ml?: boolean;
+    };
+
+export type BookPage =
+  | { kind: "cover" }
+  | { kind: "flow"; part: "contents" | "history" | "index"; blocks: FlowBlock[] }
+  | { kind: "cell"; cellIndex: number }
+  | { kind: "back" };
+
+/** First page index of each part of the book (the cover is page 0). */
+export type PartStarts = Record<BookPart, number>;
+
+export interface BookLayout {
+  pages: BookPage[];
+  starts: PartStarts;
 }

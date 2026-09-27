@@ -1,10 +1,18 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { fetchAllVisiblePeople } from "@/lib/db/people";
-import { buildBook } from "@/lib/book/build-book";
+import { buildChronicle } from "@/lib/book/build-book";
+import { parseHistory } from "@/lib/history/parse-history";
 import { BookClient } from "@/components/book/BookClient";
 
 // Always read fresh from the shared DB.
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+async function loadHistory() {
+  const file = path.join(process.cwd(), "content", "family-history.md");
+  return parseHistory(await readFile(file, "utf8"));
+}
 
 export default async function HomePage() {
   let people;
@@ -18,7 +26,7 @@ export default async function HomePage() {
     return (
       <main className="flex min-h-dvh items-center justify-center p-6">
         <div className="parchment page-border max-w-md rounded-lg p-8 text-center">
-          <h1 className="font-serif text-2xl font-semibold text-ink-900">
+          <h1 className="font-serif text-xl font-semibold text-ink-900">
             The chronicle is empty
           </h1>
           <p className="mt-3 text-sm text-ink-700">
@@ -29,10 +37,10 @@ export default async function HomePage() {
     );
   }
 
-  const book = buildBook(people);
+  const [history, data] = [await loadHistory(), buildChronicle(people)];
   return (
     <main>
-      <BookClient book={book} />
+      <BookClient data={data} history={history} />
     </main>
   );
 }
@@ -41,7 +49,7 @@ function DbError({ message }: { message: string }) {
   return (
     <main className="flex min-h-dvh items-center justify-center p-6">
       <div className="parchment page-border max-w-lg rounded-lg p-8 text-center">
-        <h1 className="font-serif text-2xl font-semibold text-heritage-700">
+        <h1 className="font-serif text-xl font-semibold text-heritage-700">
           Unable to open the chronicle
         </h1>
         <p className="mt-3 text-sm text-ink-800">
