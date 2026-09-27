@@ -55,10 +55,16 @@ same MySQL database with the same credentials.
    (`main` branch).
 2. Node version **20 or newer**. Install: `npm install` · Build: `npm run build` ·
    Start: `npm start`.
-3. Environment variables:
-   - `DATABASE_URL` — the tree app's value (`mysql://USER:PASSWORD@localhost:3306/panachi`).
+3. Environment variables (this website's own settings; the tree app's are not shared):
+   - Recommended: `DATABASE_PASSWORD` = the tree app's MySQL password in plain text.
+     User, host and database default to `u627857774_admin`, `127.0.0.1`,
+     `u627857774_panachi` (override with `DATABASE_USER` / `DATABASE_HOST` /
+     `DATABASE_NAME` if needed).
+   - Or `DATABASE_URL` =
+     `mysql://u627857774_admin:PASSWORD@127.0.0.1:3306/u627857774_panachi`
+     (no quotes; write `@` in the password as `%40`).
    - `NEXT_PUBLIC_IMAGE_BASE_URL` — leave empty.
-4. Deploy. `npm start` runs `scripts/start.js`, which listens on Hostinger's `PORT`
+4. Save, then **redeploy** (variables are only picked up by a new deployment). `npm start` runs `scripts/start.js`, which listens on Hostinger's `PORT`
    (3100 locally). There are no migrations: the chronicle never writes to the database.
 
 Notes:
