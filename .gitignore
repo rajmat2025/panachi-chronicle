@@ -26,6 +26,10 @@ yarn-error.log*
 # prisma
 /prisma/generated
 
+# source documents (kept locally, not published)
+/docs/*.docx
+/docs/*.pdf
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

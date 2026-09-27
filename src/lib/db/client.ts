@@ -1,4 +1,4 @@
-import { PrismaClient } from "../../../prisma/generated/client";
+import { PrismaClient } from "@prisma/client";
 
 /**
  * READ-ONLY Prisma client for the shared `panachi` database.

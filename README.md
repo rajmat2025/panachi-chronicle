@@ -27,9 +27,9 @@ depend on the tree app in any way, and it **never writes** to the database.
 ## Getting started
 
 ```bash
-npm install
-npm run db:generate   # generate the read-only Prisma client
+npm install           # also generates the read-only Prisma client
 npm run dev           # http://localhost:3100
+npm run build && npm start   # production build, also on port 3100
 ```
 
 ### Environment (`.env`)
@@ -38,20 +38,59 @@ npm run dev           # http://localhost:3100
 # Read-only connection to the existing family-tree database
 DATABASE_URL="mysql://USER:PASSWORD@localhost:3306/panachi"
 
-# Origin of the tree app that serves uploaded photos.
-# Relative image paths are prefixed with this (dev: the tree dev server).
-NEXT_PUBLIC_IMAGE_BASE_URL="http://localhost:3005"
+# Empty: photos are served from this app's public/uploads/people folder.
+# A URL (e.g. the tree app's site) prefixes relative photo paths stored in the DB.
+NEXT_PUBLIC_IMAGE_BASE_URL=""
 ```
 
-Photos physically live with the tree app, so the chronicle references them by URL
-rather than copying any files.
+Photos in `public/uploads/people/{branch}/{code}/` (named by genealogy notation) are
+attached automatically and ship with this repo.
+
+## Deploying to Hostinger (Node.js web app)
+
+The chronicle runs next to the tree app on the same Hostinger account and reads the
+same MySQL database with the same credentials.
+
+1. hPanel → **Websites → Add website → Node.js app**, connect this GitHub repo
+   (`main` branch).
+2. Node version **20 or newer**. Install: `npm install` · Build: `npm run build` ·
+   Start: `npm start`.
+3. Environment variables:
+   - `DATABASE_URL` — the tree app's value (`mysql://USER:PASSWORD@localhost:3306/panachi`).
+   - `NEXT_PUBLIC_IMAGE_BASE_URL` — leave empty.
+4. Deploy. `npm start` runs `scripts/start.js`, which listens on Hostinger's `PORT`
+   (3100 locally). There are no migrations: the chronicle never writes to the database.
+
+Notes:
+
+- Build tools (Prisma CLI, Tailwind, TypeScript) are regular dependencies so the build
+  works on Hostinger, and `postinstall` generates the Prisma client there.
+- `prisma/schema.prisma` includes the `debian-openssl-1.1.x` engine used by Hostinger.
+- `NEXT_PUBLIC_*` values are baked in at build time; redeploy after changing them.
 
 ## How it works
 
+- **Book order** — Cover → Contents → Family History (Malayalam, from
+  `content/family-history.md`) → Family Index → one page per family in depth-first order.
+- **Letter-size pages** — every page is a fixed 8.5 × 11 in page (816 × 1056 px) with
+  1 in side margins. The screen view scales whole pages; **Print** (toolbar button or
+  Ctrl+P) outputs one page per sheet with `@page { size: letter; margin: 0 }`. Type is
+  set in points on a staggered scale (cover 34 → part 22 → names 18–21 → section 15 →
+  body 11 → details 10 → index 9.5 → labels 7.5).
+- **Pagination** — the history, contents and index flow across pages. The client
+  measures them against the exact page content box after fonts load, splits long
+  paragraphs between pages and keeps headings with the text that follows. Contents and
+  index page numbers come from that layout, so they match the printed book.
+- **Editing the history** — edit `content/family-history.md` (conventions are
+  described in the comment at the top of the file); no code change is needed.
+- **Not used** — the `people.original_name` column is deliberately not mapped.
 - **Ordering** — the true hierarchy is rebuilt from `parentCode` links and traversed
   depth-first (`G → A → A1 → A1.1 → A1.2 → B`); siblings sort by `sortOrder` then a
   natural genealogy-code comparator (so `A1.2` precedes `A1.10`).
 - **Family Cells** — each person + embedded spouse + direct children becomes one page.
+  Children with no spouse and no children of their own (and only short notes) are
+  shown in full on their parent's page instead of on a page of their own; the index
+  and search point to the parent's page for them.
 - **Template variants** (auto-selected from the data):
   - **Alpha** (media-rich): framed photo + wrapped biography when a photo exists.
   - **Beta** (text-centric): larger type + centered notes when there is no photo.
@@ -66,7 +105,9 @@ rather than copying any files.
 prisma/schema.prisma          Read-only DB projection
 src/lib/db/                    Read-only Prisma client + queries
 src/lib/genealogy/notation.ts  Natural genealogy-code comparator
-src/lib/book/build-book.ts     Ordering, family cells, variants, pagination
+content/family-history.md      Family history text (Malayalam), shown first in the book
+src/lib/history/               Parser for the history text
+src/lib/book/build-book.ts     Ordering, family cells, variants, index groups
 src/components/book/           Book engine UI (flip, pages, variants, overlays)
 src/app/                       App Router entry (server read → client book)
 ```

@@ -10,7 +10,8 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "./generated/client"
+  // debian-openssl-1.1.x is the engine Hostinger's Node.js hosting needs.
+  binaryTargets = ["native", "debian-openssl-1.1.x"]
 }
 
 datasource db {
@@ -26,8 +27,8 @@ model Person {
   generationNumber Int     @map("generation_number")
   sortOrder        Int     @default(0) @map("sort_order")
 
+  // `original_name` is intentionally not mapped: the chronicle does not use it.
   displayName   String  @map("display_name") @db.Text
-  originalName  String? @map("original_name") @db.Text
   otherName     String? @map("other_name") @db.Text
   familyName    String? @map("family_name") @db.Text
   place         String? @db.Text
