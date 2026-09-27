@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import clsx from "clsx";
 import { resolveImageUrl } from "@/lib/image";
 import { useLightbox, type LightboxImage } from "./LightboxContext";
@@ -40,8 +41,10 @@ export function Photo({
 }) {
   const openLightbox = useLightbox();
   const mode = useRenderMode();
+  // A photo recorded in the database may be missing on the tree site; drop the frame.
+  const [failed, setFailed] = useState(false);
   const resolved = resolveImageUrl(url);
-  if (!resolved) return null;
+  if (!resolved || failed) return null;
 
   const images: LightboxImage[] = gallery && gallery.length > 0 ? gallery : [{ url: resolved }];
   const startIndex = Math.max(
@@ -62,6 +65,7 @@ export function Photo({
           src={resolved}
           alt={alt}
           loading={mode === "print" ? "eager" : "lazy"}
+          onError={() => setFailed(true)}
           className="block aspect-[3/4] w-full object-cover"
         />
       </button>

@@ -2,20 +2,23 @@ import fs from "fs";
 import path from "path";
 
 /**
- * Local photo index.
+ * Photo folder index (read-only).
  *
- * Photos live in this app's own `public/uploads/people/{branch}/{code}/` folders,
- * named after the genealogy notation (dots → underscores), matching the source
- * layout:
+ * Photos live only on the tree site. When PHOTOS_DIR points at the tree's
+ * `uploads/people` folder (on Hostinger both sites share one account), the
+ * folder is listed so photos that were added without a database record still
+ * appear. Files are never copied or modified; the returned paths are the
+ * tree's public paths (`/uploads/people/...`), resolved against IMAGE_BASE_URL.
+ *
+ * Layout: {PHOTOS_DIR}/{branch}/{code}/, with dots in the code as underscores:
  *   Person photos:  {code}-1.jpg, {code}-2.jpg, …
  *   Spouse photos:  {code}_spouse-1.jpg, …
- *
- * We scan the folder tree so EVERY available photo is surfaced in the chronicle,
- * regardless of whether the database recorded it. This is read-only disk access.
  */
 
 const IMAGE_EXT = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"]);
 const PEOPLE_URL_PREFIX = "/uploads/people";
+/** New uploads on the tree site show up within this long. */
+const REFRESH_MS = 10 * 60 * 1000;
 
 export interface LocalPhotos {
   person: string[];
@@ -34,7 +37,7 @@ interface ScannedFile {
   index: number;
 }
 
-let cache: Map<string, LocalPhotos> | null = null;
+let cache: { builtAt: number; map: Map<string, LocalPhotos> } | null = null;
 
 function trailingIndex(filename: string): number {
   const m = filename.match(/-(\d+)\.[^.]+$/);
@@ -74,10 +77,14 @@ function walk(dir: string, relParts: string[], out: ScannedFile[]): void {
   }
 }
 
-function buildIndex(): Map<string, LocalPhotos> {
-  const root = path.join(process.cwd(), "public", "uploads", "people");
+function buildIndex(root: string): Map<string, LocalPhotos> {
   const files: ScannedFile[] = [];
-  walk(root, [], files);
+  if (fs.existsSync(root)) {
+    walk(root, [], files);
+    console.log(`[chronicle] Found ${files.length} photos in PHOTOS_DIR ${root}`);
+  } else {
+    console.warn(`[chronicle] PHOTOS_DIR not readable: ${root} (using database photos only)`);
+  }
 
   const byCode = new Map<string, ScannedFile[]>();
   for (const f of files) {
@@ -101,17 +108,17 @@ function buildIndex(): Map<string, LocalPhotos> {
   return map;
 }
 
-function getIndex(): Map<string, LocalPhotos> {
-  // Cache in production; rebuild each call in dev so newly added photos appear.
-  if (process.env.NODE_ENV === "production") {
-    if (!cache) cache = buildIndex();
-    return cache;
+function getIndex(): Map<string, LocalPhotos> | null {
+  const root = process.env.PHOTOS_DIR?.trim();
+  if (!root) return null;
+  if (!cache || Date.now() - cache.builtAt > REFRESH_MS) {
+    cache = { builtAt: Date.now(), map: buildIndex(root) };
   }
-  return buildIndex();
+  return cache.map;
 }
 
-/** Return locally-available person & spouse photo URLs for a genealogy code. */
+/** Photo paths found in the tree's folder for a genealogy code (empty without PHOTOS_DIR). */
 export function getLocalPhotos(genealogyCode: string): LocalPhotos {
   const safe = safeGenealogySegment(genealogyCode);
-  return getIndex().get(safe) ?? { person: [], spouse: [] };
+  return getIndex()?.get(safe) ?? { person: [], spouse: [] };
 }

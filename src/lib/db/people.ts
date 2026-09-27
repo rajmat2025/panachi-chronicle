@@ -1,5 +1,6 @@
 import { prisma } from "./client";
 import { getLocalPhotos } from "@/lib/uploads/local-photos";
+import { imageBaseUrl, resolveImageUrl } from "@/lib/image";
 import type { ChroniclePerson, MediaItem } from "@/types/chronicle";
 
 /** Serialize a Date to ISO string (or null) for safe passing to client components. */
@@ -52,9 +53,11 @@ export async function fetchAllVisiblePeople(): Promise<ChroniclePerson[]> {
     },
   });
 
+  const base = imageBaseUrl();
   return rows.map((row): ChroniclePerson => {
-    // Start from DB media (carries captions), then add every photo found on
-    // disk for this person's genealogy-notation folder, de-duplicated by URL.
+    // Start from DB media (carries captions), then add every photo found in the
+    // tree's folder for this genealogy code, de-duplicated by path; finally
+    // point every path at the tree site.
     const media: MediaItem[] = row.media
       .filter((m) => (m.mediaType ?? "image") === "image")
       .map((m) => ({
@@ -79,9 +82,12 @@ export async function fetchAllVisiblePeople(): Promise<ChroniclePerson[]> {
       }
     }
 
-    const profileImageUrl = row.profileImageUrl ?? local.person[0] ?? null;
-    const spouseProfileImageUrl =
-      row.spouseProfileImageUrl ?? local.spouse[0] ?? null;
+    const profileImageUrl = resolveImageUrl(row.profileImageUrl ?? local.person[0], base);
+    const spouseProfileImageUrl = resolveImageUrl(
+      row.spouseProfileImageUrl ?? local.spouse[0],
+      base
+    );
+    for (const m of media) m.url = resolveImageUrl(m.url, base) ?? m.url;
 
     return {
       id: row.id,

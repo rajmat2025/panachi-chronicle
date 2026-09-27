@@ -38,13 +38,22 @@ npm run build && npm start   # production build, also on port 3100
 # Read-only connection to the existing family-tree database
 DATABASE_URL="mysql://USER:PASSWORD@localhost:3306/panachi"
 
-# Empty: photos are served from this app's public/uploads/people folder.
-# A URL (e.g. the tree app's site) prefixes relative photo paths stored in the DB.
-NEXT_PUBLIC_IMAGE_BASE_URL=""
+# Photos live only on the tree site
+IMAGE_BASE_URL="https://tree.nuancedor.com"
+
+# Optional: read-only listing of the tree's photo folder (empty = DB photos only)
+PHOTOS_DIR="D:\projects\panachickal_tree\public\uploads\people"
 ```
 
-Photos in `public/uploads/people/{branch}/{code}/` (named by genealogy notation) are
-attached automatically and ship with this repo.
+### Photos
+
+Photos are kept in one place — the tree site — and never copied into this repo. The
+book lists each person's photos from the database (`profile_image_url`,
+`spouse_profile_image_url`, `media`) and, when `PHOTOS_DIR` is set, also lists the
+tree's `uploads/people/{branch}/{code}/` folder read-only so photos without a
+database record still appear (refreshed every 10 minutes). Every path is then linked
+to the tree site, e.g. `https://tree.nuancedor.com/uploads/people/A/A4_1/A4_1-1.jpg`
+and `…/A4_1_spouse-1.jpg` for the spouse.
 
 ## Deploying to Hostinger (Node.js web app)
 
@@ -63,8 +72,12 @@ same MySQL database with the same credentials.
    - Or `DATABASE_URL` =
      `mysql://u627857774_admin:PASSWORD@127.0.0.1:3306/u627857774_panachi`
      (no quotes; write `@` in the password as `%40`).
-   - `NEXT_PUBLIC_IMAGE_BASE_URL` — leave empty.
-4. Save, then **redeploy** (variables are only picked up by a new deployment). `npm start` runs `scripts/start.js`, which listens on Hostinger's `PORT`
+   - `IMAGE_BASE_URL` = `https://tree.nuancedor.com`
+   - `PHOTOS_DIR` = `/home/u627857774/domains/tree.nuancedor.com/uploads/people`
+     (the tree's persistent photo folder). The runtime log reports
+     `Found N photos in PHOTOS_DIR …` or `PHOTOS_DIR not readable …`.
+4. Save, then **redeploy** (variables are only picked up by a new deployment).
+   `npm start` runs `scripts/start.js`, which listens on Hostinger's `PORT`
    (3100 locally). There are no migrations: the chronicle never writes to the database.
 
 Notes:
@@ -72,7 +85,7 @@ Notes:
 - Build tools (Prisma CLI, Tailwind, TypeScript) are regular dependencies so the build
   works on Hostinger, and `postinstall` generates the Prisma client there.
 - `prisma/schema.prisma` includes the `debian-openssl-1.1.x` engine used by Hostinger.
-- `NEXT_PUBLIC_*` values are baked in at build time; redeploy after changing them.
+- `IMAGE_BASE_URL` and `PHOTOS_DIR` are read at runtime; a restart is enough.
 
 ## How it works
 
