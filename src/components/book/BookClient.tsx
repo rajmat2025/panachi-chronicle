@@ -27,6 +27,9 @@ const HTMLFlipBook = HTMLFlipBookBase as unknown as React.ComponentType<any>;
 const PAGE_W = 816;
 const PAGE_H = 1056;
 const CHROME_H = 104;
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2;
+const ZOOM_STEP = 0.1;
 
 interface Dims {
   width: number;
@@ -34,14 +37,20 @@ interface Dims {
   scale: number;
 }
 
-function computeDims(): Dims {
+function clampZoom(value: number): number {
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 10) / 10));
+}
+
+/** Fit the letter page to the window, then apply the viewer's zoom. Print is unchanged. */
+function computeDims(zoom: number): Dims {
   const availH = window.innerHeight - CHROME_H;
   const availW = window.innerWidth - 56;
   const portrait = window.innerWidth < 900;
-  let scale = Math.min(1, availH / PAGE_H);
-  const spreadW = PAGE_W * scale * (portrait ? 1 : 2);
-  if (spreadW > availW) scale *= availW / spreadW;
-  scale = Math.max(0.25, scale);
+  let fit = Math.min(1, availH / PAGE_H);
+  const spreadW = PAGE_W * fit * (portrait ? 1 : 2);
+  if (spreadW > availW) fit *= availW / spreadW;
+  fit = Math.max(0.25, fit);
+  const scale = fit * clampZoom(zoom);
   return {
     width: Math.floor(PAGE_W * scale),
     height: Math.floor(PAGE_H * scale),
@@ -131,23 +140,28 @@ function ScreenBook({
 }) {
   const bookRef = useRef<any>(null);
   const [dims, setDims] = useState<Dims | null>(null);
+  const [zoom, setZoom] = useState(1);
   const [currentPage, setCurrentPage] = useState(0);
   const currentPageRef = useRef(0);
   const [searchOpen, setSearchOpen] = useState(false);
 
+  const zoomBy = useCallback((delta: number) => {
+    setZoom((z) => clampZoom(z + delta));
+  }, []);
+
   useLayoutEffect(() => {
-    setDims(computeDims());
+    setDims(computeDims(zoom));
     let timer: number | undefined;
     const onResize = () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => setDims(computeDims()), 150);
+      timer = window.setTimeout(() => setDims(computeDims(zoom)), 150);
     };
     window.addEventListener("resize", onResize);
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener("resize", onResize);
     };
-  }, []);
+  }, [zoom]);
 
   const navigate = useCallback((pageIndex: number) => {
     bookRef.current?.pageFlip?.()?.flip(pageIndex, "top");
@@ -158,6 +172,22 @@ function ScreenBook({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (searchOpen || keysDisabled) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && (e.key === "=" || e.key === "+" || e.code === "NumpadAdd")) {
+        e.preventDefault();
+        zoomBy(ZOOM_STEP);
+        return;
+      }
+      if (mod && (e.key === "-" || e.code === "NumpadSubtract")) {
+        e.preventDefault();
+        zoomBy(-ZOOM_STEP);
+        return;
+      }
+      if (mod && e.key === "0") {
+        e.preventDefault();
+        setZoom(1);
+        return;
+      }
       if (e.key === "ArrowLeft") flipPrev();
       else if (e.key === "ArrowRight") flipNext();
       else if (e.key === "/") {
@@ -167,7 +197,18 @@ function ScreenBook({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [flipPrev, flipNext, searchOpen, keysDisabled]);
+  }, [flipPrev, flipNext, searchOpen, keysDisabled, zoomBy]);
+
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      if (searchOpen || keysDisabled) return;
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      zoomBy(e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP);
+    };
+    window.addEventListener("wheel", onWheel, { passive: false });
+    return () => window.removeEventListener("wheel", onWheel);
+  }, [searchOpen, keysDisabled, zoomBy]);
 
   const pageOfCell = useCallback(
     (cellIndex: number) => layout.starts.cells + cellIndex,
@@ -219,7 +260,7 @@ function ScreenBook({
         </div>
       </header>
 
-      <div className="relative flex flex-1 items-center justify-center px-2">
+      <div className="relative flex flex-1 items-center justify-center overflow-auto px-2">
         <div className="pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2">
           <GenerationRibbon
             generations={data.generations}
@@ -275,6 +316,34 @@ function ScreenBook({
           aria-label="Next page"
         >
           ›
+        </button>
+        <span className="mx-2 h-4 w-px bg-parchment-100/30" aria-hidden />
+        <button
+          type="button"
+          onClick={() => zoomBy(-ZOOM_STEP)}
+          disabled={zoom <= ZOOM_MIN}
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-parchment-100/40 text-lg hover:bg-parchment-100/10 disabled:opacity-40"
+          aria-label="Zoom out"
+        >
+          −
+        </button>
+        <button
+          type="button"
+          onClick={() => setZoom(1)}
+          className="min-w-14 text-center text-[11px] uppercase tracking-widest text-parchment-200 hover:text-parchment-100"
+          aria-label="Reset zoom to 100 percent"
+          title="Reset zoom (Ctrl+0)"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <button
+          type="button"
+          onClick={() => zoomBy(ZOOM_STEP)}
+          disabled={zoom >= ZOOM_MAX}
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-parchment-100/40 text-lg hover:bg-parchment-100/10 disabled:opacity-40"
+          aria-label="Zoom in"
+        >
+          +
         </button>
       </footer>
 
