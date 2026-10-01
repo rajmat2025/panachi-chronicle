@@ -75,11 +75,19 @@ body {
     inset 0 0 0 2px rgba(255, 255, 255, 0.5);
 }
 
-/* react-pageflip surface tuning */
 .stf__parent {
   margin: 0 auto;
-  /* Allow one-finger page turns and two-finger pinch-zoom. */
-  touch-action: pan-x pan-y pinch-zoom;
+}
+
+/* react-pageflip injects `touch-action: pan-y` at runtime, which blocks
+   pinch-zoom on the book itself (margins still zoom because they sit outside). */
+.stf__parent,
+.stf__parent *,
+.chronicle-book,
+.book-page,
+.letter-scaler,
+.letter-page {
+  touch-action: pan-x pan-y pinch-zoom !important;
 }
 
 .book-page {

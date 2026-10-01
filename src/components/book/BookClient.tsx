@@ -170,19 +170,47 @@ function ScreenBook({
     return () => window.removeEventListener("keydown", onKey);
   }, [flipPrev, flipNext, searchOpen, keysDisabled]);
 
-  // Two-finger pinch is the browser's zoom. Stop the page-flip library from
-  // treating those touches as a page turn.
+  // Two-finger pinch is the browser's zoom. The page-flip library listens on
+  // the book and on window, so stop those handlers while a pinch is in progress.
   useEffect(() => {
     const root = stageRef.current;
     if (!root) return;
-    const ignoreFlip = (e: TouchEvent) => {
-      if (e.touches.length >= 2) e.stopPropagation();
+    let pinching = false;
+
+    const cancelFlip = () => {
+      bookRef.current?.pageFlip?.()?.userStop?.({ x: 0, y: 0 }, true);
     };
-    root.addEventListener("touchstart", ignoreFlip, { capture: true });
-    root.addEventListener("touchmove", ignoreFlip, { capture: true });
+
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length >= 2) {
+        pinching = true;
+        e.stopPropagation();
+        cancelFlip();
+      }
+    };
+    const onMove = (e: TouchEvent) => {
+      if (pinching || e.touches.length >= 2) {
+        pinching = true;
+        e.stopPropagation();
+      }
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (pinching) {
+        e.stopPropagation();
+        if (e.touches.length === 0) pinching = false;
+      }
+    };
+
+    const opts: AddEventListenerOptions = { capture: true };
+    root.addEventListener("touchstart", onStart, opts);
+    root.addEventListener("touchmove", onMove, opts);
+    root.addEventListener("touchend", onEnd, opts);
+    root.addEventListener("touchcancel", onEnd, opts);
     return () => {
-      root.removeEventListener("touchstart", ignoreFlip, { capture: true });
-      root.removeEventListener("touchmove", ignoreFlip, { capture: true });
+      root.removeEventListener("touchstart", onStart, opts);
+      root.removeEventListener("touchmove", onMove, opts);
+      root.removeEventListener("touchend", onEnd, opts);
+      root.removeEventListener("touchcancel", onEnd, opts);
     };
   }, []);
 
